@@ -17,6 +17,11 @@ class Receivings extends Secure_Controller
 		$this->_reload();
 	}
 
+	public function json()
+        {
+                $this->_reload(array(), "json");
+        }
+
 	public function item_search()
 	{
 		$suggestions = $this->Item->get_search_suggestions($this->input->get('term'), array('search_custom' => FALSE, 'is_deleted' => FALSE), TRUE);
@@ -37,7 +42,7 @@ class Receivings extends Secure_Controller
 		echo json_encode($suggestions);
 	}
 
-	public function select_supplier()
+	public function select_supplier($res_type="gui")
 	{
 		$supplier_id = $this->input->post('supplier');
 		if($this->Supplier->exists($supplier_id))
@@ -45,10 +50,10 @@ class Receivings extends Secure_Controller
 			$this->receiving_lib->set_supplier($supplier_id);
 		}
 
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
 
-	public function change_mode()
+	public function change_mode($res_type="gui")
 	{
 		$stock_destination = $this->input->post('stock_destination');
 		$stock_source = $this->input->post('stock_source');
@@ -66,7 +71,7 @@ class Receivings extends Secure_Controller
 			$this->receiving_lib->set_stock_destination($stock_destination);
 		}
 
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
 	
 	public function set_comment()
@@ -84,7 +89,7 @@ class Receivings extends Secure_Controller
 		$this->receiving_lib->set_reference($this->input->post('recv_reference'));
 	}
 	
-	public function add()
+	public function add($res_type="gui")
 	{
 		$data = array();
 
@@ -107,10 +112,10 @@ class Receivings extends Secure_Controller
 			$data['error'] = $this->lang->line('receivings_unable_to_add_item');
 		}
 
-		$this->_reload($data);
+		$this->_reload($data, $res_type);
 	}
 
-	public function edit_item($item_id)
+	public function edit_item($item_id, $res_type="gui")
 	{
 		$data = array();
 
@@ -134,7 +139,7 @@ class Receivings extends Secure_Controller
 			$data['error']=$this->lang->line('receivings_error_editing_item');
 		}
 
-		$this->_reload($data);
+		$this->_reload($data, $res_type);
 	}
 	
 	public function edit($receiving_id)
@@ -161,11 +166,11 @@ class Receivings extends Secure_Controller
 		$this->load->view('receivings/form', $data);
 	}
 
-	public function delete_item($item_number)
+	public function delete_item($item_number, $res_type="gui")
 	{
 		$this->receiving_lib->delete_item($item_number);
 
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
 	
 	public function delete($receiving_id = -1, $update_inventory = TRUE) 
@@ -184,15 +189,15 @@ class Receivings extends Secure_Controller
 		}
 	}
 
-	public function remove_supplier()
+	public function remove_supplier($res_type="gui")
 	{
 		$this->receiving_lib->clear_reference();
 		$this->receiving_lib->remove_supplier();
 
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
 
-	public function complete()
+	public function complete($res_type="gui")
 	{
 		$data = array();
 		
@@ -250,13 +255,15 @@ class Receivings extends Secure_Controller
 		}
 
 		$data['print_after_sale'] = $this->receiving_lib->is_print_after_sale();
-
-		$this->load->view("receivings/receipt",$data);
+		if ($res_type == "json")
+			echo json_encode($data);
+		else
+			$this->load->view("receivings/receipt",$data);
 
 		$this->receiving_lib->clear_all();
 	}
 
-	public function requisition_complete()
+	public function requisition_complete($res_type="gui")
 	{
 		if($this->receiving_lib->get_stock_source() != $this->receiving_lib->get_stock_destination()) 
 		{
@@ -267,20 +274,25 @@ class Receivings extends Secure_Controller
 				$this->receiving_lib->add_item($item['item_id'], -$item['quantity'], $this->receiving_lib->get_stock_source());
 			}
 			
-			$this->complete();
+			$this->complete($res_type);
 		}
 		else 
 		{
 			$data['error'] = $this->lang->line('receivings_error_requisition');
 
-			$this->_reload($data);	
+			$this->_reload($data, $res_type);	
 		}
 	}
 	
-	public function receipt($receiving_id)
+	public function receipt($receiving_id, $res_type="gui")
 	{
 		$receiving_info = $this->Receiving->get_info($receiving_id)->row_array();
 		$this->receiving_lib->copy_entire_receiving($receiving_id);
+		$data['company_name'] = $this->config->item('company');
+		$data['company_logo'] = $this->config->item('company_logo');
+		$data['company_address'] = $this->config->item('address');
+		$data['company_phone'] = $this->config->item('phone');
+		$data['return_policy'] = $this->config->item('return_policy');
 		$data['cart'] = $this->receiving_lib->get_cart();
 		$data['total'] = $this->receiving_lib->get_total();
 		$data['mode'] = $this->receiving_lib->get_mode();
@@ -316,12 +328,15 @@ class Receivings extends Secure_Controller
 
 		$data = $this->xss_clean($data);
 		
-		$this->load->view("receivings/receipt", $data);
+		if ($res_type == "json")
+			echo json_encode($data);
+		else
+			$this->load->view("receivings/receipt", $data);
 
 		$this->receiving_lib->clear_all();
 	}
 
-	private function _reload($data = array())
+	private function _reload($data = array(), $res_type="gui")
 	{
 		$data['cart'] = $this->receiving_lib->get_cart();
 		$data['modes'] = array('receive' => $this->lang->line('receivings_receiving'), 'return' => $this->lang->line('receivings_return'));
@@ -342,6 +357,7 @@ class Receivings extends Secure_Controller
 		$data['payment_options'] = $this->Receiving->get_payment_options();
 
 		$supplier_id = $this->receiving_lib->get_supplier();
+		$data['supplier_id'] = $supplier_id;
 		$supplier_info = '';
 		if($supplier_id != -1)
 		{
@@ -364,8 +380,10 @@ class Receivings extends Secure_Controller
 		$data['print_after_sale'] = $this->receiving_lib->is_print_after_sale();
 
 		$data = $this->xss_clean($data);
-
-		$this->load->view("receivings/receiving", $data);
+		if ($res_type == "json")
+			echo json_encode($data);
+		else
+			$this->load->view("receivings/receiving", $data);
 	}
 	
 	public function save($receiving_id = -1)
@@ -392,11 +410,25 @@ class Receivings extends Secure_Controller
 		}
 	}
 
-	public function cancel_receiving()
+	public function cancel_receiving($res_type="gui")
 	{
 		$this->receiving_lib->clear_all();
 
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
+
+	public function get_transactions($supplier_id) {
+                $start_date = $this->input->get('start_date');
+                $end_date = $this->input->get('end_date');
+                $receivings = $this->Receiving->get_transactions_by_supplier($supplier_id, $start_date, $end_date);
+
+                $data_rows = array();
+                foreach($receivings->result() as $receiving)
+                {
+                	$data_rows[] = $this->xss_clean(get_receiving_data_row($receiving));
+                }
+
+                echo json_encode($data_rows);
+        }
 }
 ?>

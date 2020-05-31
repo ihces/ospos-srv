@@ -225,11 +225,33 @@ class Receiving extends CI_Model
 		);
 	}
 
+	function get_transactions_by_supplier($supplier_id, $start_date, $end_date) {
+		$inputs = array('supplier_id'=>$supplier_id, 'start_date' => $start_date, 'end_date' => $end_date);
+		$this->create_temp_table($inputs);
+
+		$this->db->select('receiving_id,
+                        MAX(receiving_date) as receiving_date,
+			MAX(receiving_time) AS receiving_time,
+                        SUM(quantity_purchased) AS items_purchased,
+                        MAX(CONCAT(employee.first_name," ",employee.last_name)) AS employee_name,
+                        MAX(supplier.company_name) AS supplier_name,
+                        SUM(total) AS total,
+                        SUM(profit) AS profit,
+                        MAX(payment_type) AS payment_type,
+                        MAX(comment) AS comment,
+                        MAX(reference) AS reference');
+                $this->db->from('receivings_items_temp AS receivings_items_temp');
+                $this->db->join('people AS employee', 'receivings_items_temp.employee_id = employee.person_id');
+                $this->db->join('suppliers AS supplier', 'receivings_items_temp.supplier_id = supplier.person_id', 'left');
+		$this->db->group_by('receiving_id', 'receiving_date');
+                $this->db->order_by('receiving_id');
+		return $this->db->get();
+	}
+
 	/*
 	We create a temp table that allows us to do easy report/receiving queries
 	*/
-	public function create_temp_table(array $inputs)
-	{
+	public function create_temp_table(array $inputs) {
 		if(empty($inputs['receiving_id']))
 		{
 			if(empty($this->config->item('date_or_time_format')))
@@ -245,6 +267,9 @@ class Receiving extends CI_Model
 		{
 			$where = 'WHERE receivings_items.receiving_id = ' . $this->db->escape($inputs['receiving_id']);
 		}
+
+		if (!empty($inputs['supplier_id']))
+			$where = $where . " AND receivings.supplier_id = " . $this->db->escape($inputs['supplier_id']);
 
 		$this->db->query('CREATE TEMPORARY TABLE IF NOT EXISTS ' . $this->db->dbprefix('receivings_items_temp') .
 			' (INDEX(receiving_date), INDEX(receiving_time), INDEX(receiving_id))

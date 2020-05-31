@@ -4,6 +4,8 @@
  * Customer class
  */
 
+define('COMPLETED', 0);
+
 class Customer extends Person
 {
 	/*
@@ -137,8 +139,38 @@ class Customer extends Person
 
 		// drop the temporary table to contain memory consumption as it's no longer required
 		$this->db->query('DROP TEMPORARY TABLE IF EXISTS ' . $this->db->dbprefix('sales_items_temp'));
-
+		
 		return $stat;
+	}
+
+	/*
+	Gets a particular customer's total due
+	*/
+	public function get_total_due($customer_id)
+	{
+		// create a temporary table to contain all the sum and average of items
+		$query = $this->db->query('SELECT (a.total_amount - IFNULL(b.total_payment, 0)) total_due FROM
+			(
+				SELECT
+					SUM(sales_items.quantity_purchased * sales_items.item_unit_price * (1.0 - sales_items.discount_percent)) AS total_amount
+				FROM ' . $this->db->dbprefix('sales') . ' AS sales
+				INNER JOIN ' . $this->db->dbprefix('sales_items') . ' AS sales_items
+					ON sales_items.sale_id = sales.sale_id
+				WHERE sales.customer_id = ' . $this->db->escape($customer_id) . ' and sales.sale_status = ' . COMPLETED . '
+			) a,
+			(
+				SELECT
+					SUM(sales_payments.payment_amount) as total_payment
+				FROM ' . $this->db->dbprefix('sales') . ' AS sales
+				INNER JOIN ' . $this->db->dbprefix('sales_payments') . ' AS sales_payments
+					ON sales_payments.sale_id = sales.sale_id and sales_payments.payment_type <> \'Due\'
+				WHERE sales.customer_id = ' . $this->db->escape($customer_id) . ' and sales.sale_status = ' . COMPLETED . '
+			) b'
+		);
+
+		$total_due = $query->row()->total_due;
+
+		return $total_due;
 	}
 
 	/*
@@ -382,6 +414,7 @@ class Customer extends Person
 			$this->db->like('first_name', $search);
 			$this->db->or_like('last_name', $search);
 			$this->db->or_like('email', $search);
+			$this->db->or_like('address_1', $search);
 			$this->db->or_like('phone_number', $search);
 			$this->db->or_like('account_number', $search);
 			$this->db->or_like('company_name', $search);

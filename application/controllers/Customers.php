@@ -50,6 +50,10 @@ class Customers extends Persons
 		echo json_encode($data_row);
 	}
 
+	public function get_total_due($customer_id) {
+		echo json_encode($this->Customer->get_total_due($customer_id));
+	}
+
 	/*
 	Returns customer table data rows. This will be called with AJAX.
 	*/
@@ -107,7 +111,7 @@ class Customers extends Persons
 	/*
 	Loads the customer edit form
 	*/
-	public function view($customer_id = -1)
+	public function view($customer_id = -1, $res_type="gui")
 	{
 		$customer_sales_tax_support = $this->config->item('customer_sales_tax_support');
 
@@ -211,7 +215,12 @@ class Customers extends Persons
 			}
 		}
 
-		$this->load->view("customers/form", $data);
+		if ($res_type == "json") {
+			$data['person_info']->date = date($this->config->item('dateformat') . ' ' . $this->config->item('timeformat'), strtotime($data['person_info']->date));
+			echo json_encode($data);
+		}
+		else
+			$this->load->view("customers/form", $data);
 	}
 
 	/*

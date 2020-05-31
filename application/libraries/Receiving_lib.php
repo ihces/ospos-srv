@@ -211,6 +211,7 @@ class Receiving_lib
 		$price = $price != NULL ? $price : $item_info->cost_price;
 		$item = array($insertkey => array(
 				'item_id' => $item_id,
+				'item_number' => $item_info->item_number,
 				'item_location' => $item_location,
 				'stock_name' => $this->CI->Stock_location->get_location_name($item_location),
 				'line' => $insertkey,

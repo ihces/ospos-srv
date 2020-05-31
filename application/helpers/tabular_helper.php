@@ -81,6 +81,27 @@ function get_sales_manage_table_headers()
 }
 
 /*
+Get the html data row for the receivings
+*/
+function get_receiving_data_row($receiving) {
+	$CI =& get_instance();
+
+	$row = array (
+		'receiving_id' => $receiving->receiving_id,
+		'receiving_time' => date($CI->config->item('dateformat') . ' ' . $CI->config->item('timeformat'), strtotime($receiving->receiving_time)),
+		'items_purchased' => $receiving->items_purchased,
+		'employee_name' => $receiving->employee_name,
+		'supplier_name' => $receiving->supplier_name,
+		'total' => to_currency($receiving->total),
+		'profit' => to_currency($receiving->profit),
+		'payment_type' => $receiving->payment_type,
+		'comment' => $receiving->comment,
+		'reference' => $receiving->reference
+	);
+	return $row;
+}
+
+/*
 Get the html data row for the sales
 */
 function get_sale_data_row($sale)
@@ -90,6 +111,7 @@ function get_sale_data_row($sale)
 
 	$row = array (
 		'sale_id' => $sale->sale_id,
+		'sale_type' => $sale->sale_type,
 		'sale_time' => date($CI->config->item('dateformat') . ' ' . $CI->config->item('timeformat'), strtotime($sale->sale_time)),
 		'customer_name' => $sale->customer_name,
 		'amount_due' => to_currency($sale->amount_due),
@@ -250,10 +272,12 @@ function get_customer_data_row($person, $stats)
 
 	return array (
 		'people.person_id' => $person->person_id,
+		'company_name' => $person->company_name,
 		'last_name' => $person->last_name,
 		'first_name' => $person->first_name,
 		'email' => empty($person->email) ? '' : mailto($person->email, $person->email),
 		'phone_number' => $person->phone_number,
+		'address_1' => $person->address_1,
 		'total' => to_currency($stats->total),
 		'messages' => empty($person->phone_number) ? '' : anchor("Messages/view/$person->person_id", '<span class="glyphicon glyphicon-phone"></span>',
 			array('class'=>'modal-dlg', 'data-btn-submit' => $CI->lang->line('common_submit'), 'title'=>$CI->lang->line('messages_sms_send'))),
@@ -304,6 +328,7 @@ function get_supplier_data_row($supplier)
 		'first_name' => $supplier->first_name,
 		'email' => empty($supplier->email) ? '' : mailto($supplier->email, $supplier->email),
 		'phone_number' => $supplier->phone_number,
+		'address_1' => $supplier->address_1,
 		'messages' => empty($supplier->phone_number) ? '' : anchor("Messages/view/$supplier->person_id", '<span class="glyphicon glyphicon-phone"></span>',
 			array('class'=>"modal-dlg", 'data-btn-submit' => $CI->lang->line('common_submit'), 'title'=>$CI->lang->line('messages_sms_send'))),
 		'edit' => anchor($controller_name."/view/$supplier->person_id", '<span class="glyphicon glyphicon-edit"></span>',

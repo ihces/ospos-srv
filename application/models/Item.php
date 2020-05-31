@@ -213,6 +213,12 @@ class Item extends CI_Model
 		{
 			$this->db->where('item_number', NULL);
 		}
+		else {
+			$this->db->group_start();
+			$this->db->where('item_number <> ', '0000000000000');
+			$this->db->or_where('item_number', NULL);
+			$this->db->group_end();
+		}
 		if($filters['low_inventory'] != FALSE)
 		{
 			$this->db->where('quantity <=', 'reorder_level');
@@ -834,6 +840,7 @@ class Item extends CI_Model
 		$this->db->from('items');
 		$this->db->like('category', $search);
 		$this->db->where('deleted', 0);
+		$this->db->where('category <>', '0000000000000');
 		$this->db->order_by('category', 'asc');
 		foreach($this->db->get()->result() as $row)
 		{
@@ -885,6 +892,32 @@ class Item extends CI_Model
 		$this->db->where('deleted', 0);
 		$this->db->distinct();
 		$this->db->order_by('category', 'asc');
+
+		return $this->db->get();
+	}
+
+	public function get_items_by_category($category) {
+		$this->db->select('item_id');
+		$this->db->select('name');
+		$this->db->select('category');
+		$this->db->select('item_number');
+		$this->db->select('pic_filename');
+		$this->db->from('items');
+		$this->db->where('category', $category);
+		$this->db->order_by('name', 'asc');
+
+		return $this->db->get();
+	}
+
+	public function get_favorite_items() {
+		$this->db->select('item_id');
+		$this->db->select('name');
+		$this->db->select('item_number');
+		$this->db->select('pic_filename');
+		$this->db->select('custom2');
+		$this->db->from('items');
+		$this->db->where('char_length(custom1) >', 0);
+		$this->db->order_by('custom1, custom3', 'asc');
 
 		return $this->db->get();
 	}

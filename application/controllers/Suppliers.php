@@ -69,7 +69,7 @@ class Suppliers extends Persons
 	/*
 	Loads the supplier edit form
 	*/
-	public function view($supplier_id = -1)
+	public function view($supplier_id = -1, $res_type="gui")
 	{
 		$info = $this->Supplier->get_info($supplier_id);
 		foreach(get_object_vars($info) as $property => $value)
@@ -78,7 +78,10 @@ class Suppliers extends Persons
 		}
 		$data['person_info'] = $info;
 
-		$this->load->view("suppliers/form", $data);
+		if ($res_type == "json")
+			echo json_encode($data);
+		else
+			$this->load->view("suppliers/form", $data);
 	}
 	
 	/*

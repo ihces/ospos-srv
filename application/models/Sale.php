@@ -1,6 +1,7 @@
 <?php if (!defined('BASEPATH')) exit('No direct script access allowed');
 
-define('COMPLETED', 0);
+if (!defined('COMPLETED'))
+	define('COMPLETED', 0);
 define('SUSPENDED', 1);
 define('CANCELED', 2);
 
@@ -293,6 +294,117 @@ class Sale extends CI_Model
 		}
 
 		return $this->db->get();
+	}
+
+	public function get_transactions_by_customer($customer_id, $start_date, $end_date) {
+		// Pick up only non-suspended records
+		$where = 'sales.sale_status = 0 AND sales.customer_id = '. $customer_id .' AND ';
+
+		if(empty($this->config->item('date_or_time_format')))
+		{
+			$where .= 'DATE(sales.sale_time) BETWEEN ' . $this->db->escape($start_date) . ' AND ' . $this->db->escape($end_date);
+		}
+		else
+		{
+			$where .= 'sales.sale_time BETWEEN ' . $this->db->escape(rawurldecode($start_date)) . ' AND ' . $this->db->escape(rawurldecode($end_date));
+		}
+
+		// NOTE: temporary tables are created to speed up searches due to the fact that they are ortogonal to the main query
+		// create a temporary table to contain all the payments per sale item
+		$this->db->query('CREATE TEMPORARY TABLE IF NOT EXISTS ' . $this->db->dbprefix('sales_payments_temp') .
+			' (PRIMARY KEY(sale_id), INDEX(sale_id))
+			(
+				SELECT payments.sale_id AS sale_id,
+					IFNULL(SUM(payments.payment_amount), 0) AS sale_payment_amount,
+					GROUP_CONCAT(CONCAT(payments.payment_type, " ", payments.payment_amount) SEPARATOR ", ") AS payment_type
+				FROM ' . $this->db->dbprefix('sales_payments') . ' AS payments
+				INNER JOIN ' . $this->db->dbprefix('sales') . ' AS sales
+					ON sales.sale_id = payments.sale_id
+				WHERE ' . $where . '
+				GROUP BY sale_id
+			)'
+		);
+
+		$decimals = totals_decimals();
+
+		$sale_price = 'sales_items.item_unit_price * sales_items.quantity_purchased * (1 - sales_items.discount_percent / 100)';
+		$sale_cost = 'SUM(sales_items.item_cost_price * sales_items.quantity_purchased)';
+		$tax = 'IFNULL(SUM(sales_items_taxes.tax), 0)';
+
+		if($this->config->item('tax_included'))
+		{
+			$sale_total = 'ROUND(SUM(' . $sale_price . '), ' . $decimals . ')';
+			$sale_subtotal = $sale_total . ' - ' . $tax;
+		}
+		else
+		{
+			$sale_subtotal = 'ROUND(SUM(' . $sale_price . '), ' . $decimals . ')';
+			$sale_total = $sale_subtotal . ' + ' . $tax;
+		}
+
+		// create a temporary table to contain all the sum of taxes per sale item
+		$this->db->query('CREATE TEMPORARY TABLE IF NOT EXISTS ' . $this->db->dbprefix('sales_items_taxes_temp') .
+			' (INDEX(sale_id), INDEX(item_id))
+			(
+				SELECT sales_items_taxes.sale_id AS sale_id,
+					sales_items_taxes.item_id AS item_id,
+					sales_items_taxes.line AS line,
+					SUM(sales_items_taxes.item_tax_amount) as tax
+				FROM ' . $this->db->dbprefix('sales_items_taxes') . ' AS sales_items_taxes
+				INNER JOIN ' . $this->db->dbprefix('sales') . ' AS sales
+					ON sales.sale_id = sales_items_taxes.sale_id
+				INNER JOIN ' . $this->db->dbprefix('sales_items') . ' AS sales_items
+					ON sales_items.sale_id = sales_items_taxes.sale_id AND sales_items.line = sales_items_taxes.line
+				WHERE ' . $where . '
+				GROUP BY sale_id, item_id, line
+			)'
+		);
+
+		$this->db->select('
+				sales.sale_id AS sale_id,
+				MAX(DATE(sales.sale_time)) AS sale_date,
+				MAX(sales.sale_time) AS sale_time,
+				MAX(sales.sale_type) AS sale_type,
+				MAX(sales.invoice_number) AS invoice_number,
+				MAX(sales.quote_number) AS quote_number,
+				SUM(sales_items.quantity_purchased) AS items_purchased,
+				MAX(CONCAT(customer_p.first_name, " ", customer_p.last_name)) AS customer_name,
+				MAX(customer.company_name) AS company_name,
+				' . "
+				IFNULL($sale_subtotal, $sale_total) AS subtotal,
+				$tax AS tax,
+				IFNULL($sale_total, $sale_subtotal) AS total,
+				$sale_cost AS cost,
+				(IFNULL($sale_subtotal, $sale_total) - $sale_cost) AS profit,
+				IFNULL($sale_total, $sale_subtotal) AS amount_due,
+				MAX(payments.sale_payment_amount) AS amount_tendered,
+				(MAX(payments.sale_payment_amount) - IFNULL($sale_total, $sale_subtotal)) AS change_due,
+				" . '
+				MAX(payments.payment_type) AS payment_type
+			');
+
+		$this->db->from('sales_items AS sales_items');
+		$this->db->join('sales AS sales', 'sales_items.sale_id = sales.sale_id', 'inner');
+		$this->db->join('people AS customer_p', 'sales.customer_id = customer_p.person_id', 'LEFT');
+		$this->db->join('customers AS customer', 'sales.customer_id = customer.person_id', 'LEFT');
+		$this->db->join('sales_payments_temp AS payments', 'sales.sale_id = payments.sale_id', 'LEFT OUTER');
+		$this->db->join('sales_items_taxes_temp AS sales_items_taxes',
+			'sales_items.sale_id = sales_items_taxes.sale_id AND sales_items.item_id = sales_items_taxes.item_id AND sales_items.line = sales_items_taxes.line',
+			'LEFT OUTER');
+
+		$this->db->where($where);
+
+		$this->db->group_by('sales.sale_id');
+
+		// order by sale time by default
+		// $this->db->order_by($sort, $order);
+
+		/* if($rows > 0)
+		{
+			$this->db->limit($rows, $limit_from);
+		} */
+
+                return $this->db->get();
 	}
 
 	/**
@@ -640,7 +752,6 @@ class Sale extends CI_Model
 		$customer = $this->Customer->get_info($customer_id);
 
 		$sales_taxes = array();
-
 		foreach($items as $line=>$item)
 		{
 			$cur_item_info = $this->Item->get_info($item['item_id']);
@@ -771,7 +882,6 @@ class Sale extends CI_Model
 
 		$this->db->where('dinner_table_id',$dinner_table);
 		$this->db->update('dinner_tables', $dinner_table_data);
-
 		$this->db->trans_complete();
 
 		if($this->db->trans_status() === FALSE)

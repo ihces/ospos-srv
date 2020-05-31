@@ -22,6 +22,11 @@ class Sales extends Secure_Controller
 		$this->_reload();
 	}
 
+	public function json() 
+	{
+		$this->_reload(array(), "json");
+	}
+
 	public function manage()
 	{
 		$person_id = $this->session->userdata('person_id');
@@ -102,6 +107,21 @@ class Sales extends Secure_Controller
 		echo json_encode(array('total' => $total_rows, 'rows' => $data_rows, 'payment_summary' => $payment_summary));
 	}
 
+	public function get_transactions($customer_id) {
+		$start_date = $this->input->get('start_date');
+		$end_date = $this->input->get('end_date');
+
+		$sales = $this->Sale->get_transactions_by_customer($customer_id, $start_date, $end_date);
+
+		$data_rows = array();
+		foreach($sales->result() as $sale)
+		{
+			$data_rows[] = $this->xss_clean(get_sale_data_row($sale));
+		}
+
+		echo json_encode($data_rows);
+	}
+
 	public function item_search()
 	{
 		$suggestions = array();
@@ -129,7 +149,7 @@ class Sales extends Secure_Controller
 		echo json_encode($suggestions);
 	}
 
-	public function select_customer()
+	public function select_customer($res_type="gui")
 	{
 		$customer_id = $this->input->post('customer');
 		if($this->Customer->exists($customer_id))
@@ -144,10 +164,10 @@ class Sales extends Secure_Controller
 			}
 		}
 
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
 
-	public function change_mode()
+	public function change_mode($res_type="gui")
 	{
 		$mode = $this->input->post('mode');
 		$this->sale_lib->set_mode($mode);
@@ -185,7 +205,7 @@ class Sales extends Secure_Controller
 			$this->sale_lib->set_sale_location($stock_location);
 		}
 
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
 
 	public function change_register_mode($sale_type)
@@ -253,7 +273,7 @@ class Sales extends Secure_Controller
 	}
 
 	// Multiple Payments
-	public function add_payment()
+	public function add_payment($res_type="gui")
 	{
 		$data = array();
 
@@ -350,18 +370,18 @@ class Sales extends Secure_Controller
 			}
 		}
 
-		$this->_reload($data);
+		$this->_reload($data, $res_type);
 	}
 
 	// Multiple Payments
-	public function delete_payment($payment_id)
+	public function delete_payment($payment_id, $res_type="gui")
 	{
 		$this->sale_lib->delete_payment($payment_id);
 
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
 
-	public function add()
+	public function add($res_type="gui")
 	{
 		$data = array();
 
@@ -447,10 +467,10 @@ class Sales extends Secure_Controller
 				$data['warning'] = $this->sale_lib->out_of_stock($item_id_or_number_or_item_kit_or_receipt, $item_location);
 			}
 		}
-		$this->_reload($data);
+		$this->_reload($data, $res_type);
 	}
 
-	public function edit_item($item_id)
+	public function edit_item($item_id, $res_type="gui")
 	{
 		$data = array();
 
@@ -477,17 +497,17 @@ class Sales extends Secure_Controller
 
 		$data['warning'] = $this->sale_lib->out_of_stock($this->sale_lib->get_item_id($item_id), $item_location);
 
-		$this->_reload($data);
+		$this->_reload($data, $res_type);
 	}
 
-	public function delete_item($item_number)
+	public function delete_item($item_number, $res_type="gui")
 	{
 		$this->sale_lib->delete_item($item_number);
 
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
 
-	public function remove_customer()
+	public function remove_customer($res_type="gui")
 	{
 		$this->sale_lib->clear_giftcard_remainder();
 		$this->sale_lib->clear_rewards_remainder();
@@ -496,10 +516,10 @@ class Sales extends Secure_Controller
 		$this->sale_lib->clear_quote_number();
 		$this->sale_lib->remove_customer();
 
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
 
-	public function complete()
+	public function complete($res_type="gui")
 	{
 		$sale_id = $this->sale_lib->get_sale_id();
 		$sale_type = $this->sale_lib->get_sale_type();
@@ -739,7 +759,6 @@ class Sales extends Secure_Controller
 			{
 				$sale_type = SALE_TYPE_POS;
 			}
-
 			$data['sale_id_num'] = $this->Sale->save($sale_id, $data['sale_status'], $data['cart'], $customer_id, $employee_id, $data['comments'], $invoice_number, $work_order_number, $quote_number, $sale_type, $data['payments'], $data['dinner_table'], $data['taxes']);
 
 			$data['sale_id'] = 'POS ' . $data['sale_id_num'];
@@ -750,6 +769,8 @@ class Sales extends Secure_Controller
 			if($data['sale_id_num'] == -1)
 			{
 				$data['error_message'] = $this->lang->line('sales_transaction_failed');
+				if ($res_type == "json")
+					echo json_encode($data);
 			}
 			else
 			{
@@ -757,8 +778,10 @@ class Sales extends Secure_Controller
 
 				// Reload (sorted) and filter the cart line items for printing purposes
 				$data['cart'] = $this->get_filtered($this->sale_lib->get_cart_reordered($data['sale_id_num']));
-
-				$this->load->view('sales/receipt', $data);
+				if ($res_type == "json")
+					echo json_encode($data);
+				else
+					$this->load->view('sales/receipt', $data);
 				$this->sale_lib->clear_all();
 			}
 		}
@@ -979,7 +1002,7 @@ class Sales extends Secure_Controller
 		return $this->xss_clean($data);
 	}
 
-	private function _reload($data = array())
+	private function _reload($data = array(), $res_type="gui")
 	{
 		$sale_id = $this->session->userdata('sale_id');
 		if($sale_id == '')
@@ -1087,14 +1110,29 @@ class Sales extends Secure_Controller
 
 		$data = $this->xss_clean($data);
 
-		$this->load->view("sales/register", $data);
+                if ($res_type == "json")
+			echo json_encode($data);
+		else
+			$this->load->view("sales/register", $data);
 	}
 
-	public function receipt($sale_id)
+	public function receipt($sale_id, $res_type="gui")
 	{
-		$data = $this->_load_sale_data($sale_id);
-		$this->load->view('sales/receipt', $data);
-		$this->sale_lib->clear_all();
+		if ($res_type == "json") {
+			$data = $this->_load_sale_data($sale_id);
+			$data['company_name'] = $this->config->item('company');
+			$data['company_logo'] = $this->config->item('company_logo');
+			$data['company_address'] = $this->config->item('address');
+			$data['company_phone'] = $this->config->item('phone');
+			$data['return_policy'] = $this->config->item('return_policy');
+			echo json_encode($data);
+			$this->sale_lib->clear_all();
+		}
+		else {
+			$data = $this->_load_sale_data($sale_id);
+			$this->load->view('sales/receipt', $data);
+			$this->sale_lib->clear_all();
+		}
 	}
 
 	public function invoice($sale_id)
@@ -1258,7 +1296,7 @@ class Sales extends Secure_Controller
 	 * Completed sales (POS Sales or Invoiced Sales) can not be removed from the system
 	 * Work orders can be canceled but are not physically removed from the sales history
 	 */
-	public function cancel()
+	public function cancel($res_type="gui")
 	{
 		$sale_id = $this->sale_lib->get_sale_id();
 		if($sale_id != -1 && $sale_id != '')
@@ -1276,7 +1314,7 @@ class Sales extends Secure_Controller
 		}
 
 		$this->sale_lib->clear_all();
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
 
 	public function discard_suspended_sale()
@@ -1292,7 +1330,7 @@ class Sales extends Secure_Controller
 	 * If the current sale is already suspended then update the existing suspended sale.
 	 * Otherwise create it as a new suspended sale
 	 */
-	public function suspend()
+	public function suspend($res_type="gui")
 	{
 		$mode = $this->sale_lib->get_mode();
 		$sale_id = $this->sale_lib->get_sale_id();
@@ -1326,26 +1364,34 @@ class Sales extends Secure_Controller
 		}
 
 		$this->sale_lib->clear_all();
-		$this->_reload($data);
+		$this->_reload($data, $res_type);
 	}
 
 	/**
 	 * List suspended sales
 	 */
-	public function suspended()
+	public function suspended($res_type="gui")
 	{
 		$customer_id = $this->sale_lib->get_customer();
 		$data = array();
 		$data['suspended_sales'] = $this->xss_clean($this->Sale->get_all_suspended($customer_id));
 		$data['dinner_table_enable'] = $this->config->item('dinner_table_enable');
-		$this->load->view('sales/suspended', $data);
+		if ($res_type == "json"){
+			foreach ($data['suspended_sales'] as $sale_idx => $suspended_sale) {
+				$customer = $this->Customer->get_info($suspended_sale['customer_id']);
+				$data['suspended_sales'][$sale_idx]['customer'] = $customer->first_name . ' ' . $customer->last_name;
+                    	}
+                	echo json_encode($data);
+		}
+		else
+                    $this->load->view('sales/suspended', $data);
 	}
 
 	/*
 	 * Unsuspended sales are now left in the tables and are only removed
 	 * when they are intentionally cancelled.
 	 */
-	public function unsuspend()
+	public function unsuspend($res_type="gui")
 	{
 		$sale_id = $this->input->post('suspended_sale_id');
 		$this->sale_lib->clear_all();
@@ -1357,8 +1403,7 @@ class Sales extends Secure_Controller
 
 		// Set current register mode to reflect that of unsuspended order type
 		$this->change_register_mode($this->sale_lib->get_sale_type());
-
-		$this->_reload();
+		$this->_reload(array(), $res_type);
 	}
 
 	public function check_invoice_number()

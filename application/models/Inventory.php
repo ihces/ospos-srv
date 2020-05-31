@@ -11,14 +11,20 @@ class Inventory extends CI_Model
 		return $this->db->insert('inventory', $inventory_data);
 	}
 
-	public function get_inventory_data_for_item($item_id, $location_id = FALSE)
+	public function get_inventory_data_for_item($item_id, $location_id = FALSE, $start_date=FALSE, $end_date=FALSE)
 	{
 		$this->db->from('inventory');
 		$this->db->where('trans_items', $item_id);
-        if($location_id != FALSE)
-        {
-            $this->db->where('trans_location', $location_id);
-        }
+        
+		if($location_id != FALSE)
+        	{
+            		$this->db->where('trans_location', $location_id);
+        	}
+		
+		if ($start_date != FALSE && $end_date != FALSE)
+		{
+			$this->db->where('trans_date BETWEEN ' . $this->db->escape(rawurldecode($start_date)) . ' AND ' . $this->db->escape(rawurldecode($end_date)));
+		}
 		$this->db->order_by('trans_date', 'desc');
 
 		return $this->db->get();

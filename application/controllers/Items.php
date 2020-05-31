@@ -175,7 +175,7 @@ class Items extends Secure_Controller
 		echo json_encode($result);
 	}
 
-	public function view($item_id = -1)
+	public function view($item_id = -1, $res_type="gui")
 	{
 		$data['item_tax_info'] = $this->xss_clean($this->Item_taxes->get_info($item_id));
 		$data['default_tax_1_rate'] = '';
@@ -253,7 +253,13 @@ class Items extends Secure_Controller
 			$data['stock_locations'] = $location_array;
 		}
 
-		$this->load->view('items/form', $data);
+		if ($res_type == "json") {
+			$data['default_tax_1_name'] = $this->config->item('default_tax_1_name');
+			$data['default_tax_2_name'] = $this->config->item('default_tax_2_name');
+			echo json_encode($data);
+		}
+		else
+			$this->load->view('items/form', $data);
 	}
 
 	public function inventory($item_id = -1)
@@ -279,7 +285,7 @@ class Items extends Secure_Controller
 		$this->load->view('items/form_inventory', $data);
 	}
 	
-	public function count_details($item_id = -1)
+	public function count_details($item_id = -1, $res_type="gui", $location_id=FALSE)
 	{
 		$item_info = $this->Item->get_info($item_id);
 		foreach(get_object_vars($item_info) as $property => $value)
@@ -298,8 +304,25 @@ class Items extends Secure_Controller
 			$data['stock_locations'][$location['location_id']] = $location['location_name'];
 			$data['item_quantities'][$location['location_id']] = $quantity;
 		}
+                
+		if ($res_type == "json") {
+			$start_date = $this->input->get('start_date');
+			$end_date = $this->input->get('end_date');
+			$inventory_array = $this->Inventory->get_inventory_data_for_item($item_info->item_id, $location_id, $start_date, $end_date)->result_array();
+                	$employees = array();
 
-		$this->load->view('items/form_count_details', $data);
+                	foreach($inventory_array as $row)
+                	{
+                        	$employee = $this->Employee->get_info($row['trans_user']);
+                        	$employees[strval($row['trans_user'])] = $employee->first_name . ' ' . $employee->last_name;
+                	}
+			$data["inventory"] = $inventory_array;
+			$data["employees"] = $employees;
+
+			echo json_encode($data);
+		}
+		else
+			$this->load->view('items/form_count_details', $data);
 	}
 
 	public function generate_barcodes($item_ids)
@@ -825,6 +848,69 @@ class Items extends Secure_Controller
 				echo json_encode(array('success' => FALSE, 'message' => $this->lang->line('items_excel_import_nodata_wrongformat')));
 			}
 		}
+	}
+
+	public function get_items_by_category($category) {
+		$items = $this->Item->get_items_by_category(rawurldecode($category));
+
+                $data_rows = array();
+                foreach($items->result() as $item)
+                {	
+			if ($item->pic_filename == NULL)
+				$item->pic_filename = "item.png";
+			$ext = pathinfo($item->pic_filename, PATHINFO_EXTENSION);
+			if($ext == '')
+			{
+				// if file extension is not found guess it (legacy)
+				$images = glob('./uploads/item_pics/' . $item->pic_filename . '.*');
+			}
+			else
+			{
+				// else just pick that file
+				$images = glob('./uploads/item_pics/' . $item->pic_filename);
+			}
+			
+			$item_data = array(
+				'item_id' => $item->item_id,
+				'name' => $item->name,
+				'item_number' => $item->item_number,
+				'image_path' => sizeof($images) > 0 ? base_url($images[0]) : ''
+			);
+			$data_rows[] = $this->xss_clean($item_data);
+                }
+
+                echo json_encode($data_rows);
+	}
+
+	public function get_favorite_items() {
+		$items = $this->Item->get_favorite_items();
+		
+                $data_rows = array();
+                foreach($items->result() as $item)
+                {
+			$ext = pathinfo($item->pic_filename, PATHINFO_EXTENSION);
+			if($ext == '')
+			{
+				// if file extension is not found guess it (legacy)
+				$images = glob('./uploads/item_pics/' . $item->pic_filename . '.*');
+			}
+			else
+			{
+				// else just pick that file
+				$images = glob('./uploads/item_pics/' . $item->pic_filename);
+			}
+			
+			$item_data = array(
+				'item_id' => $item->item_id,
+				'name' => $item->name,
+				'item_number' => $item->item_number,
+				'group_name' => $item->custom2,
+				'image_path' => sizeof($images) > 0 ? base_url($images[0]) : ''
+			);
+			$data_rows[] = $this->xss_clean($item_data);
+                }
+
+                echo json_encode($data_rows);
 	}
 
 	/**
