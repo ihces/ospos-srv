@@ -163,7 +163,7 @@ class Customer extends Person
 					SUM(sales_payments.payment_amount) as total_payment
 				FROM ' . $this->db->dbprefix('sales') . ' AS sales
 				INNER JOIN ' . $this->db->dbprefix('sales_payments') . ' AS sales_payments
-					ON sales_payments.sale_id = sales.sale_id and sales_payments.payment_type <> \'Due\'
+					ON sales_payments.sale_id = sales.sale_id and sales_payments.payment_type <> \'' . $this->lang->line('sales_due') . '\'
 				WHERE sales.customer_id = ' . $this->db->escape($customer_id) . ' and sales.sale_status = ' . COMPLETED . '
 			) b'
 		);
