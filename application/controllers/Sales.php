@@ -27,6 +27,12 @@ class Sales extends Secure_Controller
 		$this->_reload(array(), "json");
 	}
 
+	public function due_payment()
+	{
+		$this->sale_lib->clear_all();
+		$this->_reload(array(), "json");
+	}
+
 	public function manage()
 	{
 		$person_id = $this->session->userdata('person_id');
@@ -119,7 +125,17 @@ class Sales extends Secure_Controller
 			$data_rows[] = $this->xss_clean(get_sale_data_row($sale));
 		}
 
-		echo json_encode($data_rows);
+		$employee_id = $this->Employee->get_logged_in_employee_info()->person_id;
+		$employee_info = $this->Employee->get_info($employee_id);
+
+		echo json_encode(array(
+			'company_name' => $this->config->item('company'),
+			'company_address' => $this->config->item('address'),
+			'company_phone' => $this->config->item('phone'),
+			'transaction_time' => date($this->config->item('dateformat') . ' ' . $this->config->item('timeformat')),
+			'employee' => $employee_info->first_name . ' ' . $employee_info->last_name[0], 
+			'return_policy' => $this->config->item('return_policy'),
+			'transactions' => $data_rows));
 	}
 
 	public function item_search()
@@ -370,6 +386,8 @@ class Sales extends Secure_Controller
 			}
 		}
 
+		error_log($amount_tendered);
+		error_log($payment_type);
 		$this->_reload($data, $res_type);
 	}
 

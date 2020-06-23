@@ -315,7 +315,8 @@ class Items extends Secure_Controller
                 	{
                         	$employee = $this->Employee->get_info($row['trans_user']);
                         	$employees[strval($row['trans_user'])] = $employee->first_name . ' ' . $employee->last_name;
-                	}
+			}
+			$data['company_name'] = $this->config->item('company');
 			$data["inventory"] = $inventory_array;
 			$data["employees"] = $employees;
 
@@ -403,8 +404,6 @@ class Items extends Secure_Controller
 			'allow_alt_description' => $this->input->post('allow_alt_description') != NULL,
 			'is_serialized' => $this->input->post('is_serialized') != NULL,
 			'deleted' => $this->input->post('is_deleted') != NULL,
-			'custom1' => $this->input->post('custom1') == NULL ? '' : $this->input->post('custom1'),
-			'custom2' => $this->input->post('custom2') == NULL ? '' : $this->input->post('custom2'),
 			'custom3' => $this->input->post('custom3') == NULL ? '' : $this->input->post('custom3'),
 			'custom4' => $this->input->post('custom4') == NULL ? '' : $this->input->post('custom4'),
 			'custom5' => $this->input->post('custom5') == NULL ? '' : $this->input->post('custom5'),
@@ -414,6 +413,11 @@ class Items extends Secure_Controller
 			'custom9' => $this->input->post('custom9') == NULL ? '' : $this->input->post('custom9'),
 			'custom10' => $this->input->post('custom10') == NULL ? '' : $this->input->post('custom10')
 		);
+
+		if ($item_id == -1) {
+			$item_data['custom1'] = $this->input->post('custom1') == NULL ? '' : $this->input->post('custom1');
+			$item_data['custom2'] = $this->input->post('custom2') == NULL ? '' : $this->input->post('custom2');
+		}
 
 		$x = $this->input->post('tax_category_id');
 		if(!isset($x))
@@ -888,6 +892,8 @@ class Items extends Secure_Controller
                 $data_rows = array();
                 foreach($items->result() as $item)
                 {
+			if ($item->pic_filename == NULL)
+				$item->pic_filename = "item.png";
 			$ext = pathinfo($item->pic_filename, PATHINFO_EXTENSION);
 			if($ext == '')
 			{
